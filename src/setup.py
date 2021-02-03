@@ -8,7 +8,7 @@ from setuptools import find_packages, setup, Command
 
 
 
-NAME = 'rnnXna'
+NAME = 'rnnxna'
 DESCRIPTION = 'Build rnnXna Models.'
 URL = 'https://github.com/Gabaldonlab/rnnXna'
 EMAIL = 'ah.hafez@gmail.com'
