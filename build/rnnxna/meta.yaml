@@ -18,6 +18,8 @@ requirements:
     - python
     - numpy
     - tensorflow
+    - scikit-learn
+    - matplotlib
 
 test:
   imports:
