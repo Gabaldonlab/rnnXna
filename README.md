@@ -12,7 +12,7 @@ rnnXna can be installed using Anaconda package manager (Conda), without a need t
 If anaconda or miniconda package managers are installed, simply run the following command to install rnnXna and its dependencies.:
 
 ```bash
-conda install -c gabaldonlab -c bioconda rnnxna
+conda install -c gabaldonlab  rnnxna
 ```
 
 The examplified procedure of rnnXna installation and optional specific enviroment creation can be found in our step-by-step tutorial. 
