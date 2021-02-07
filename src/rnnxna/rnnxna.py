@@ -24,14 +24,14 @@ from rnnxna.__version__ import __version__
 _Main_Prog_Name = "rnnXna" 
 _Main_Prog_Desc = """
   --
-  rnnXna Software
+  rnnXna tool : train and use RNN models for DNA/RNA sequences.
 """
 
 soft_version =  __version__
 
 
 
-__DEBUG__ = True
+__DEBUG__ = False
 ###############################################################################
 #%%
 import enum
@@ -66,8 +66,17 @@ def createArgumentParser():
                        help = "Specify the output directory for rnnXna output files.")
     shardParser.add_argument("--prefix", default = None, type = str, metavar = "Prefix",
                        help = "Specify the a prefix for output files.")
-    shardParser.add_argument("--gpu", action = "store_true", default = False,
+    
+    #shardParser.add_argument("--gpu", action = "store_true", default = False,
+    #                   help = "Use GPU for compiling the model.")
+    shardParser.add_argument("--device-index", type=int,metavar = "int",
+                       help = "specify device [CPU/GPU] index to use if more than one is available.")
+    group_ex_2 = shardParser.add_mutually_exclusive_group(required=False)
+    group_ex_2.add_argument("--gpu", action = "store_true", default = False,
                        help = "Use GPU for compiling the model.")
+    group_ex_2.add_argument("--tpu", action = "store_true", default = False,
+                       help = "Use Colab TPU for compiling the model.")
+    
     shardParser.add_argument("--verbose", "--verbose", type = str, choices=["All","None","Debug"], default = "All",
         help = "Verbose mode.")
     ## train
@@ -79,7 +88,7 @@ def createArgumentParser():
     
     parser_train = subparsers.add_parser("train",help = "Train RNN model",formatter_class=argparse.ArgumentDefaultsHelpFormatter , parents=[shardParser] )
     
-    inputSharedGroup = parser_train.add_argument_group("Input dataset Arguments","Arguments specific to input dataset for training")
+    inputSharedGroup = parser_train.add_argument_group("Training mode Arguments","Arguments specific to training mode")
     inputSharedGroup.add_argument("-i", "--input",type=str, required=True, metavar = "dataset" , dest = "inputCSVFile",
     	help="Specify the input dataset file in csv format.")
     
@@ -99,9 +108,18 @@ def createArgumentParser():
     	help="Specify the dropout ratio between LSTM layers. Default None.")
     ## if cv
     ## number of folds
-    inputSharedGroup.add_argument("--cv-k",nargs="+",type=int,metavar = "int",
+    inputSharedGroup.add_argument("--cv-k",type=int,metavar = "int",
     	help="If Specified, perfrom cross validatoin with K folds")
-    ## report file prefix
+    inputSharedGroup.add_argument("--random-seed", type=int,metavar = "int", default=8,
+                       help = "Seed for random number generator.")
+    ## learning and training
+    inputSharedGroup.add_argument("--epochs",type=int,metavar = "int", default=25,
+    	help="Training hyperparameter : number of Epochs for the learning algorithm")
+    inputSharedGroup.add_argument("--learning-rate",type=int,metavar = "float",default=1e-3,
+    	help="Training hyperparameter : learning rate for the learning algorithm")
+    inputSharedGroup.add_argument("--batch-size",type=int,metavar = "int",default=128,
+    	help="Training hyperparameter : batch size for the learning algorithm")
+
     ## 
     
     
@@ -109,16 +127,17 @@ def createArgumentParser():
     
     parser_predict = subparsers.add_parser("predict",help = "New Prediction from RNN models",formatter_class=argparse.ArgumentDefaultsHelpFormatter , parents=[shardParser] )
     
-    inputSharedGroup = parser_predict.add_argument_group("Input Arguments","Arguments specific to inputs")
+    inputSharedGroup = parser_predict.add_argument_group("Prediction mode Arguments","Arguments specific to prediction mode")
     inputSharedGroup.add_argument("-m", "--model",type=str, required=True, metavar = "rnn model",
     	help="Specify the input model. The output from the training phase")
     
-    
-    inputSharedGroup.add_argument("--csv",type=str,  metavar = "csv", dest = "inputCSVFiles", nargs="+",
+    group_ex_2 = inputSharedGroup.add_mutually_exclusive_group(required=True)
+    group_ex_2.add_argument("--csv",type=str,  metavar = "csv", dest = "inputCSVFiles", nargs="+",
     	help="Input csv file(s) contains DNA/RNA sequences for performing perdiction")
-    inputSharedGroup.add_argument("--fasta" ,type=str, metavar = "fasta",dest = "inputFastaFiles", nargs="+",
+    group_ex_2.add_argument("--fasta" ,type=str, metavar = "fasta",dest = "inputFastaFiles", nargs="+",
     	help="Input fasta file(s) with DNA/RNA sequences to perfrom perdiction. rnnXna will cut it to kmer suquences then perfom the prediction according to the model.")
-    
+    inputSharedGroup.add_argument("--batch-size",type=int,metavar = "int",default=256,
+    	help="Batch size for feeding samples into network for prediction.")
     # group_ex_2 = inputSharedGroup.add_mutually_exclusive_group(required=True)
     # group_ex_2.add_argument("--csv",type=str,  metavar = "csv",
     # 	help="Input csv file contains DNA/RNA sequences for performing perdiction")
@@ -181,8 +200,52 @@ def parseArgument(argumentParser):
     if parsedArgs.task_type == TaskType.Predict.value:
         if parsedArgs.inputCSVFiles == None and parsedArgs.inputFastaFiles == None:
             raise RNNError("At least Input Csv or fasta file needed in prediction mode",parsedArgs)
-        
+    
+    import tensorflow as tf
 
+    if parsedArgs.gpu == False and parsedArgs.tpu == False:
+        #import tensorflow as tf
+        #tf.config.threading.set_intra_op_parallelism_threads(2)
+        #tf.config.threading.set_inter_op_parallelism_threads(2)
+        physical_devices = tf.config.list_physical_devices('CPU')
+        if len(physical_devices) > 1 :
+            helpers.getLogger().warning("Multiple CPUs available. rnnXna Will use the first one. If you want to use different one please specify its index using --device-index argument.")
+        def getDevice():
+            return tf.device(f"/CPU:{parsedArgs.device_index}")
+        parsedArgs.deviceOrScope =  getDevice #  tf.device(f"/CPU:{parsedArgs.device_index}")
+    elif parsedArgs.gpu == True:
+        physical_devices = tf.config.list_physical_devices('GPU')
+        if len(physical_devices) == 0 :
+            raise RNNError("Can not find any GPU available. Please make sure that you already have a GPU and already have installed the required packages")
+        if len(physical_devices) > 1 :
+            helpers.getLogger().info("Found multiple GPUs available. rnnXna Will use the first one. If you want to use different one please specify its index using --device-index argument.")
+        if parsedArgs.device_index == None :
+            parsedArgs.device_index = 0
+        tf.config.experimental.set_memory_growth(physical_devices[parsedArgs.gpu_index], enable=True)
+        def getDevice():
+            return tf.device(f"/device:GPU:{parsedArgs.device_index}")
+        parsedArgs.deviceOrScope = getDevice # tf.device(f"/device:GPU:{parsedArgs.device_index}")
+        helpers.getLogger().debug(f"Using /device:GPU:{parsedArgs.device_index} for model buidling")
+    elif parsedArgs.tpu == True:
+        ## TODO :: the following has been test only with colab?? check others ??
+        try :
+            tpu = tf.distribute.cluster_resolver.TPUClusterResolver()
+
+    
+            tf.config.experimental_connect_to_cluster(tpu)
+            tf.tpu.experimental.initialize_tpu_system(tpu)
+    
+            strategy = tf.distribute.TPUStrategy(tpu)
+            helpers.getLogger().info(f'Running on TPU -> REPLICAS {strategy.num_replicas_in_sync}')
+            #helpers.getLogger().info(tpu.cluster_spec().as_dict()['worker'])
+            #helpers.getLogger().info("REPLICAS : ")
+            #helpers.getLogger().info( strategy.num_replicas_in_sync)
+            def getScope():
+                return strategy.scope()
+            parsedArgs.deviceOrScope = getScope
+        except ValueError as vr :
+            #helpers.getLogger().fetal("Can not connect to  TPU Cluster please check your setting ")
+            raise RNNError("Can not connect to  TPU Cluster please check your Colab notebook setting ") 
     return parsedArgs
 
 
@@ -235,7 +298,6 @@ def rnnXnaTrain(parsedArgs):
 
     ## auto detect model type
     modelType = autoDetectInput(parsedArgs.inputCSVFile)
-    print(modelType.value)
     if modelType.value == ModelType.Classification.value :
         logger.debug("\tTrainning Classification Model")
         Xs,Ys,seqLen,kClassMap = helpers.readDb(parsedArgs.inputCSVFile)
@@ -251,19 +313,124 @@ def rnnXnaTrain(parsedArgs):
         ## TODO :: set learning paramters
         logger.debug(newModel)
         ## TODO :: hide model type from method name ?
-        newModel.buildModel()
+        with parsedArgs.deviceOrScope() :
+            newModel.buildModel()
         ## report error before continue 
         newModel.trainModel(Xs,Ys)
         newModel.saveModel(outputModelFileName)
-        
+        helpers.plotTrainingHist([newModel],parsedArgs)
     else :
         logger.debug("\tTrainning Regression Model")
         Xs,Ys,seqLen = helpers.readDbReg(parsedArgs.inputCSVFile)
         newModel = RNNModel.initNewRModel(seqLen,parsedArgs)
         logger.debug(newModel)
-        newModel.buildModel()
+        with parsedArgs.deviceOrScope() :
+            newModel.buildModel()
         newModel.trainModel(Xs,Ys)
         newModel.saveModel(outputModelFileName)
+        helpers.plotTrainingHist([newModel],parsedArgs)
+
+
+def rnnXnaCV(parsedArgs):
+    logger = helpers.getLogger()
+    logger.info("Cross Validation Mode")
+    
+    if parsedArgs.prefix == None :
+        ## TODO :: check if prefix is a path contains //
+        parsedArgs.prefix = "rnnModel"
+    #outputModelFileName = f"{parsedArgs.out_dir}/{parsedArgs.prefix}.model"
+
+    ## auto detect model type
+    modelType = autoDetectInput(parsedArgs.inputCSVFile)
+    if modelType.value == ModelType.Classification.value :
+        logger.debug("\tCross Validation - Classification Model")
+        Xs,Ys,seqLen,kClassMap = helpers.readDb(parsedArgs.inputCSVFile)
+        
+        newModels = []
+        modelsPredictions = []
+        orginalYs = []
+        foldsData=[]
+        seed = parsedArgs.random_seed 
+        n_splits = parsedArgs.cv_k
+        from sklearn.model_selection import StratifiedKFold
+        import time
+        kfolds = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+        for foldIndex, (train, test) in enumerate(kfolds.split(Xs, Ys)):
+            start_time = time.time()
+            logger.info("Starting training on Fold {}".format(foldIndex))
+            #logger.info(train)
+            cv_train_data = Xs[train]
+            cv_train_labels = Ys[train]
+            newModel = RNNModel.initNewKModel(seqLen,kClassMap,parsedArgs)
+            with parsedArgs.deviceOrScope() :
+                newModel.buildModel()
+            newModel.trainModel(cv_train_data,cv_train_labels)
+            outputModelFileName = f"{parsedArgs.out_dir}/{parsedArgs.prefix}_fold_{foldIndex}.model"
+            newModel.saveModel(outputModelFileName)
+            newModels.append(newModel)
+            ## write save this to file
+            #Start model training and write model to file
+            #predict and write prediction to file
+            cv_test_data = Xs[test]
+            cv_test_labels = Ys[test]
+            orginalYs.append(cv_test_labels)
+            YsPredicted = newModel.predict(cv_test_data)
+            modelsPredictions.append(YsPredicted)
+            foldsData.append((train,test))
+            #logger.info(test)
+            logger.info(f"\t  Training Fold {foldIndex} took : {time.time() - start_time} seconds ***" )
+        
+        helpers.cvEvaluate2K(orginalYs,modelsPredictions , parsedArgs)
+        helpers.plotTrainingHist(newModels,parsedArgs)
+
+        
+    else :
+        logger.debug("\tCross Validation - Regression Model")
+        Xs,Ys,seqLen = helpers.readDbReg(parsedArgs.inputCSVFile)
+        #_N = 1000
+        #Xs = Xs[1:_N]
+        #Ys = Ys[1:_N]
+        newModels = []
+        modelsPredictions = []
+        orginalYs = []
+        foldsData=[]
+        seed = parsedArgs.random_seed
+        n_splits = parsedArgs.cv_k
+        from sklearn.model_selection import KFold
+        import time
+        kfolds = KFold(n_splits=n_splits,shuffle=True, random_state=seed)
+        for foldIndex, (train, test) in enumerate(kfolds.split(Xs)):
+            start_time = time.time()
+            logger.info("Starting training on Fold {}".format(foldIndex))
+            #logger.info(train)
+            #logger.info(test)
+            
+            cv_train_data = Xs[train]
+            cv_train_values = Ys[train]
+            newModel = RNNModel.initNewRModel(seqLen,parsedArgs)
+            logger.debug(newModel)
+            with parsedArgs.deviceOrScope() :
+                newModel.buildModel()
+            newModel.trainModel(cv_train_data,cv_train_values)
+            outputModelFileName = f"{parsedArgs.out_dir}/{parsedArgs.prefix}_fold_{foldIndex}.model"
+            newModel.saveModel(outputModelFileName)
+            newModels.append(newModel)
+            ## write save this to file
+            #Start model training and write model to file
+            #predict and write prediction to file
+            cv_test_data = Xs[test]
+            cv_test_values = Ys[test]
+            orginalYs.append(cv_test_values)
+            YsPredicted = newModel.predict(cv_test_data)
+            modelsPredictions.append(YsPredicted)
+            foldsData.append((train,test))
+            #logger.info(cv_test_values[1:10])
+            #logger.info(YsPredicted[1:10])
+            logger.info(f"\t  Training Fold {foldIndex} took : {time.time() - start_time} seconds ***" )
+        
+        helpers.cvEvaluateReg(orginalYs,modelsPredictions , parsedArgs)
+        helpers.plotTrainingHist(newModels,parsedArgs)
+        
 
 
 
@@ -276,7 +443,9 @@ def rnnXnaPredict(parsedArgs):
     modelFileName = parsedArgs.model
     if not os.path.exists(modelFileName):
         raise RNNError(f"Cant find input model {modelFileName}")
-    loadedModel = RNNModel.loadModel(modelFileName)
+    with parsedArgs.deviceOrScope() :
+        loadedModel = RNNModel.loadModel(modelFileName)
+    loadedModel.predict_batch_size = parsedArgs.batch_size
     seqLen = loadedModel.kmer
     logger.debug(loadedModel)
     logger.info("RNN Model is Ok.")
@@ -328,20 +497,24 @@ def rnnXnaMain():
         logger = helpers.getLogger()
 
         ## validate input file
-    
+        #print( parsedArgs.cv_k)
         if parsedArgs.task_type == TaskType.Train.value:
-            rnnXnaTrain(parsedArgs)
+            if parsedArgs.cv_k == None:
+                rnnXnaTrain(parsedArgs)
+            else:
+                rnnXnaCV(parsedArgs)
+
         if parsedArgs.task_type == TaskType.Predict.value:
             rnnXnaPredict(parsedArgs)
     
-        logger.info("rnnXna Finished")
+        logger.info("rnnXna Finished.")
     ## TODO :: need to test this from terminal 
     except ArgumentError as argErr:
-        print(argErr)
+        #print(argErr)
         raise argErr
         return -1
     except SystemExit as sysErr:
-        print(sysErr)
+        #print(sysErr)
         raise sysErr
         return -1
     except RNNError as rnnErr:
@@ -351,7 +524,7 @@ def rnnXnaMain():
         return -1
     except Exception as e:
         #print(e)
-        raise
+        raise e
 
 
     return 0

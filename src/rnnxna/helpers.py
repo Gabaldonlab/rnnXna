@@ -6,6 +6,8 @@ import numpy as np
 
 from enum import Enum
 
+import rnnxna.plots  as plots
+
   
 
 def _get_custom_name(argument):
@@ -95,7 +97,7 @@ kClassMap= {"DS":1,"SS":0}
 '''
 read input database from csv file sep with default tab,
 this method is for Classfication only
-TODO :: read regression as well
+TODO :: Return ORG seq as well as string for further use
 '''
 def readDb(inputFileName,nClms=2, sep="\t", kClassMap = None):
     #%%
@@ -399,9 +401,225 @@ def writeCsvReg(outPutPredictionFileName,Xs,predictedY, sep="\t"):
     
     
     
+##  CV
+'''
+Cross Validation Evaluation for binary Classification
+'''
+def cvEvaluate2K(orginalYs,modelsPredictions , parsedArgs):
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import auc 
+
+    logger = getLogger()
+    n_splits = len(orginalYs)
+    figure_dpi=96
+    figureWidth = 1280/figure_dpi
+    figureHeight = 720/figure_dpi
+    tprs = []
+    aucs = []
+    mean_fpr = np.linspace(0, 1, 100)
+    fig, ax = plt.subplots(figsize=(figureWidth, figureHeight), dpi=figure_dpi)
+    for i in range(0,n_splits):
+        y_pred = modelsPredictions[i].ravel()
+        y_org = orginalYs[i]
+        logger.debug(f"CV Evaluation of Fold {i}")
+        #logger.debug(y_pred)
+        #logger.debug(y_org)
+        viz = plots.plot_roc_curve3(y_org,y_pred,
+                         name='ROC fold {}'.format(i),
+                         alpha=0.3, lw=1, ax=ax)
+        logger.info(f"Fold {i} AUC = {viz.roc_auc:.3f}")
+        interp_tpr = np.interp(mean_fpr, viz.fpr, viz.tpr)
+        interp_tpr[0] = 0.0
+        tprs.append(interp_tpr)
+        aucs.append(viz.roc_auc)
+
+
+
+    ax.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r',
+        label='Chance', alpha=.8)
+
+    mean_tpr = np.mean(tprs, axis=0)
+    mean_tpr[-1] = 1.0
+    mean_auc = auc(mean_fpr, mean_tpr)
+    std_auc = np.std(aucs)
+
+
+
+    ax.plot(mean_fpr, mean_tpr, color='b',
+        label=r'Mean ROC (AUC = %0.3f $\pm$ %0.3f)' % (mean_auc, std_auc),
+        lw=2, alpha=.8)
+    logger.info(r'Mean ROC (AUC = %0.3f $\pm$ %0.3f)' % (mean_auc, std_auc))
+
+    std_tpr = np.std(tprs, axis=0)
+    tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+    tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+    ax.fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+                label=r'$\pm$ 1 std. dev.')
+
+    ax.set(xlim=[-0.05, 1.05], ylim=[-0.05, 1.05],
+       title="RNN ROC ")
+    ax.legend(loc="lower right")
+    
+    filePrefix = "plot"
+    if parsedArgs.prefix != None :
+        filePrefix = f"{parsedArgs.prefix}_plot"
+    
+    outputPlotFileName = f"{parsedArgs.out_dir}/{filePrefix}_ROC"
+
+    plt.savefig(f"{outputPlotFileName}.png",dpi=figure_dpi)
+    plt.savefig(f"{outputPlotFileName}.eps", format='eps')
+    #plt.show()
+
+##  CV
+'''
+Cross Validation Evaluation for binary Classification
+'''
+def cvEvaluateReg(orginalYs,modelsPredictions , parsedArgs):
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import mean_squared_error
+    from sklearn.metrics import mean_absolute_error
+
+    logger = getLogger()
+    n_splits = len(orginalYs)
+    figure_dpi=96
+    figureWidth = 1280/figure_dpi
+    figureHeight = 720/figure_dpi
+    mses = []
+    maes = []
+    fig, ax = plt.subplots(figsize=(figureWidth, figureHeight), dpi=figure_dpi)
+    for i in range(0,n_splits):
+        y_pred = modelsPredictions[i].ravel()
+        y_org = orginalYs[i]
+        logger.debug(f"CV Evaluation of Fold {i}")
+        #logger.debug(y_pred)
+        #logger.debug(y_org)
+        mae = mean_absolute_error(y_org,y_pred)
+        mse = mean_squared_error(y_org,y_pred)
+        mses.append(mse)
+        maes.append(mae)
+        ax.scatter(y_org, y_pred, edgecolors=(0, 0, 0) , label=r'Fold %d - MSE = %0.3f, MAE %0.3f)' % (i,mse, mae)  )
+
+
+    #ax.plot([y_org.min(), y_org.max()], [y_org.min(), y_org.max()], 'k--', lw=4)
+    #tprs_upper = np.minimum(y_pred + 1, 1)
+    #tprs_lower = np.maximum(y_pred - 1, 0)
+    #ax.fill_between(y_org, tprs_lower, tprs_upper, color='grey', alpha=.2,
+    #            label=r'$\pm$ 1 std. dev.')
+    ax.set_xlabel('Training')
+    ax.set_ylabel('Predicted')
+    ax.legend(loc="upper right")
+    ax.set_title(r'Model Corss Validation : MEAN - MSE = %0.3f, MAE %0.3f - STD - MSE = %0.3f, MAE %0.3f' % (np.mean(mses), np.mean(maes),np.std(mses), np.std(maes) ) )
     
     
+    filePrefix = "plot"
+    if parsedArgs.prefix != None :
+        filePrefix = f"{parsedArgs.prefix}_plot"
+    
+    outputPlotFileName = f"{parsedArgs.out_dir}/{filePrefix}_CV"
+
+    fig.savefig(f"{outputPlotFileName}.png",dpi=figure_dpi)
+    fig.savefig(f"{outputPlotFileName}.eps", format='eps')
+    #plt.show()
     
     
+def plotTrainingHist(newModels,parsedArgs):
+    filePrefix = "plot"
+    if parsedArgs.prefix != None :
+        filePrefix = f"{parsedArgs.prefix}_plot"
+    import matplotlib.pyplot as plt
     
-    
+    accuracyKey = None
+    plotYLabel = "Accuracy"
+    plotTitle = "Model Accuracy"
+    plotFilePostfix = "training_accuracy"
+    #logger = getLogger()
+    figure_dpi=96
+    figureWidth = 1280/figure_dpi
+    figureHeight = 720/figure_dpi
+    nModels = len(newModels)
+    if nModels == 1:
+        ## Just one Model
+        newModel = newModels[0]
+        
+        hist = newModel.modelTrainHistory.history
+        if "loss" in hist:
+            fig, ax = plt.subplots(figsize=(figureWidth, figureHeight), dpi=figure_dpi)
+            ax.plot(hist["loss"])
+            ax.set_xticks(newModel.modelTrainHistory.epoch)
+            ax.set_ylabel('loss')
+            ax.set_xlabel('epoch')
+            ax.set_title("Model Loss")
+            outputPlotFileName = f"{parsedArgs.out_dir}/{filePrefix}_training_loss"
+            fig.savefig(f"{outputPlotFileName}.png",dpi=figure_dpi)
+            fig.savefig(f"{outputPlotFileName}.eps", format='eps')
+        ## accuracy
+        
+        fig, ax = plt.subplots(figsize=(figureWidth, figureHeight), dpi=figure_dpi)
+
+        if "categorical_accuracy" in hist:
+            accuracyKey = "categorical_accuracy"
+        elif "binary_accuracy" in hist:
+            accuracyKey = "binary_accuracy"
+        elif "mean_absolute_error" in hist:
+            accuracyKey = "mean_absolute_error"
+            plotYLabel = "MAE"
+            plotTitle = "Model Mean Absolute Error"
+            plotFilePostfix = "training_mae"
+        if accuracyKey != None :
+            ax.plot(hist[accuracyKey])
+            ax.set_xticks(newModel.modelTrainHistory.epoch)
+            ax.set_ylabel(plotYLabel)
+            ax.set_xlabel('epoch')
+            ax.set_title(plotTitle)
+            outputPlotFileName = f"{parsedArgs.out_dir}/{filePrefix}_{plotFilePostfix}"
+            fig.savefig(f"{outputPlotFileName}.png",dpi=figure_dpi)
+            fig.savefig(f"{outputPlotFileName}.eps", format='eps')
+    else:
+        ## we are in CV
+        # plot Loss first
+        fig, ax = plt.subplots(figsize=(figureWidth, figureHeight), dpi=figure_dpi)
+        legends = []
+        lossKey = "loss"
+        for i in range(0,nModels):
+            newModel = newModels[i]
+            hist = newModel.modelTrainHistory.history
+            ax.plot(hist[lossKey])
+            legends.append(f"Loss fold {i}")
+        ax.set_xticks(newModel.modelTrainHistory.epoch)
+        ax.legend(legends, loc='upper right')
+        ax.set_ylabel('loss')
+        ax.set_xlabel('epoch')
+        ax.set_title("Model Loss")
+        outputPlotFileName = f"{parsedArgs.out_dir}/{filePrefix}_training_loss"
+        fig.savefig(f"{outputPlotFileName}.png",dpi=figure_dpi)
+        fig.savefig(f"{outputPlotFileName}.eps", format='eps')
+        
+        ## Accuracy
+        fig, ax = plt.subplots(figsize=(figureWidth, figureHeight), dpi=figure_dpi)
+        legends = []
+        accuracyKey = None
+        for i in range(0,nModels):
+            newModel = newModels[i]
+            hist = newModel.modelTrainHistory.history
+            if "categorical_accuracy" in hist:
+                accuracyKey = "categorical_accuracy"
+            elif "binary_accuracy" in hist:
+                accuracyKey = "binary_accuracy"
+            elif "mean_absolute_error" in hist:
+                accuracyKey = "mean_absolute_error"
+                plotYLabel = "MAE"
+                plotTitle = "Model Mean Absolute Error"
+                plotFilePostfix = "training_mae"
+            if accuracyKey != None :
+                ax.plot(hist[accuracyKey])
+                legends.append(f"MAE fold {i}")
+            
+        if accuracyKey != None :
+            ax.set_xticks(newModel.modelTrainHistory.epoch)
+            ax.legend(legends, loc='upper right')
+            ax.set_ylabel(plotYLabel)
+            ax.set_xlabel('epoch')
+            ax.set_title(plotTitle)
+            outputPlotFileName = f"{parsedArgs.out_dir}/{filePrefix}_{plotFilePostfix}"
+            fig.savefig(f"{outputPlotFileName}.png",dpi=figure_dpi)
+            fig.savefig(f"{outputPlotFileName}.eps", format='eps')

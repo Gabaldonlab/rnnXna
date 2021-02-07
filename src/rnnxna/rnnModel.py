@@ -11,7 +11,8 @@ from rnnxna.helpers import  getLogger
 import tensorflow as tf
 from tensorflow import keras
 import pickle
-
+import time
+#%%
 _wordLen = 4
 _max_k_classes = 50
 
@@ -38,7 +39,7 @@ def autoDetectInput(inputFileName,nClms=2, sep="\t", maxNLine = 10000):
     logger.info("Trying to auto detect Model type.")
     #targetIndex = 1
     inputFile = open(inputFileName,"r")
-    detectedNClms = nClms
+    #detectedNClms = nClms
     KClass = set()
     for i in range(0,maxNLine):
         line = inputFile.readline()
@@ -62,12 +63,20 @@ def getCutomMsgFromLog(logs ):
     ## TODO :: impl. 
     msg = "Average loss: {:7.3f}".format(logs["loss"])
     if "binary_accuracy"  in logs:
-        msg += ", binary_accuracy: {:7.3f} ".format(logs["binary_accuracy"])
+        msg += ", Accuracy: {:7.3f} ".format(logs["binary_accuracy"])
     if "categorical_accuracy"  in logs :
-        msg += ", categorical_accuracy: {:7.3f} ".format(logs["categorical_accuracy"])
+        msg += ", Accuracy: {:7.3f} ".format(logs["categorical_accuracy"])
+    if "mean_squared_error" in logs : 
+        msg += ", MSE : {:7.3f} ".format(logs["mean_squared_error"])
+    
+    #mean_absolute_error
+    if "mean_absolute_error" in logs : 
+        msg += ", MAE : {:7.3f} ".format(logs["mean_absolute_error"])
 
-    keys = list(logs.keys())
-    print(f"log keys {keys}")
+    if "time" in logs :
+        msg += ", Elapsed time : {:4.0f} Seconds ".format(logs["time"])
+    #keys = list(logs.keys())
+    #print(f"log keys {keys}")
     return msg
     
 
@@ -85,14 +94,66 @@ def prepareInput(X,kmerLen):
   X = np.reshape(X, (len(X), kmerLen, _wordLen))
   return X
 
+
+class EarlyStoppingAtMinLoss(keras.callbacks.Callback):
+    """Stop training when the loss is at its min, i.e. the loss stops decreasing.
+
+  Arguments:
+      patience: Number of epochs to wait after min has been hit. After this
+      number of no improvement, training stops.
+     """
+    def __init__(self, patience=4):
+        super(EarlyStoppingAtMinLoss, self).__init__()
+        self.patience = patience
+        # best_weights to store the weights at which the minimum loss occurs.
+        self.best_weights = None
+        self.logger = getLogger()
+
+    def on_train_begin(self, logs=None):
+        # The number of epoch it has waited when loss is no longer minimum.
+        self.wait = 0
+        # The epoch the training stops at.
+        self.stopped_epoch = 0
+        # Initialize the best as infinity.
+        self.best = np.Inf
+
+
+    def on_epoch_end(self, epoch, logs=None):
+        current = logs.get("loss")
+        if np.less(current, self.best):
+            self.best = current
+            self.wait = 0
+            # Record the best weights if current results is better (less).
+            self.best_weights = self.model.get_weights()
+        else:
+            self.wait += 1
+            if self.wait >= self.patience:
+                self.stopped_epoch = epoch
+                self.model.stop_training = True
+                self.logger.info("Restoring model weights from the end of the best epoch.")
+                self.model.set_weights(self.best_weights)
+
+    def on_train_end(self, logs=None):
+        if self.stopped_epoch > 0:
+            self.logger.info("Epoch %05d: early stopping" % (self.stopped_epoch + 1))
+
+
+
 class CustomCallback(keras.callbacks.Callback):
     logger = getLogger()
     
     def on_train_begin(self, logs=None):
         #keys = list(logs.keys())
         self.logger.info("Starting Model training")
+    
+        
+    def on_epoch_begin(self, epoch, logs=None):
+        self.epochStartTime = time.time()
+        
     def on_epoch_end(self, epoch, logs=None):
         #keys = list(logs.keys())
+        eta = time.time() - self.epochStartTime
+        logs["time"] = eta
         cstmMsg = "{" + getCutomMsgFromLog(logs) + "}"
         self.logger.info("Epoch {} of training: {}".format(epoch, cstmMsg))
 
@@ -113,8 +174,8 @@ class CustomCallback(keras.callbacks.Callback):
 
 class RNNModel:
     # training parameters
-    epochs = 5 
-    batch_size = 128*2
+    epochs = 25 
+    batch_size = 128
     predict_batch_size = batch_size
     learning_rate = 1e-3
     
@@ -184,7 +245,7 @@ class RNNModel:
         XReshape = prepareInput(X,self.kmer)
         ##raise Exception('spam', 'eggs')
         if self.nClasses == 2 :
-            self.modelTrainHistory = self.model.fit(XReshape,Y,epochs=self.epochs,batch_size=self.batch_size , verbose=0 , callbacks=[CustomCallback()])
+            self.modelTrainHistory = self.model.fit(XReshape,Y,epochs=self.epochs,batch_size=self.batch_size , verbose=0 , callbacks=[CustomCallback(),EarlyStoppingAtMinLoss()])
         else:
             yOHT = keras.utils.to_categorical(Y,self.nClasses,"int64")
             self.modelTrainHistory = self.model.fit(XReshape,yOHT,epochs=self.epochs,batch_size=self.batch_size , verbose=0 , callbacks=[CustomCallback()])
@@ -215,8 +276,10 @@ class RNNModel:
         self.model.compile(
             optimizer=tf.keras.optimizers.RMSprop(),
             #optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
-            loss=tf.keras.losses.mean_squared_error)
+            loss=tf.keras.losses.mean_squared_error,
+            metrics=[tf.keras.metrics.mean_absolute_error])
     def trainRegressionModel(self, X , Y):
+        
         # TODO :: TOBE
         XReshape = prepareInput(X,self.kmer)
         self.modelTrainHistory = self.model.fit(XReshape,Y,epochs=self.epochs,batch_size=self.batch_size , verbose=0 , callbacks=[CustomCallback()])
@@ -238,9 +301,12 @@ class RNNModel:
             self.buildRegressionModel()
     
     def trainModel(self, X , Y):
+        logger = getLogger()
         if self.modelType == ModelType.Classification :
+            logger.debug("Train Classification Model")
             self.trainClassficationModel(X,Y)
         else:
+            logger.debug("Train Regression Model")
             self.trainRegressionModel(X,Y)
 
             
@@ -308,6 +374,9 @@ class RNNModel:
         
         newModel.constructModelParameters()
         ## TODO :: set learning paramters
+        newModel.batch_size = parsedArgs.batch_size
+        newModel.epochs = parsedArgs.epochs
+        newModel.learning_rate = parsedArgs.learning_rate
         return newModel
 
     @classmethod
@@ -321,6 +390,9 @@ class RNNModel:
         
         newModel.constructModelParameters()
         ## TODO :: set learning paramters
+        newModel.batch_size = parsedArgs.batch_size
+        newModel.epochs = parsedArgs.epochs
+        newModel.learning_rate = parsedArgs.learning_rate
         return newModel
 
     

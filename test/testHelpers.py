@@ -26,3 +26,23 @@ testPredFile = "/home/data/git/rnnxna/test/test_files/test_pred.csv"
 Xs,Ys = helpers.readCsv(testPredFile, seqLen = 19)
 ## Fail
 Xs,Ys = helpers.readCsv(testPredFile, seqLen = 21)
+#%%
+import importlib
+importlib.reload(rnnxna)
+import rnnxna.helpers as helpers
+inputFileName = "/home/data/git/rnnxna/test/test_files/samples_19_2k.csv"
+Xs,Ys,seqLen, kClassMap = helpers.readDb(inputFileName)
+#%% 
+import matplotlib.pyplot as plt
+
+figure_dpi=96
+figureWidth = 1280/figure_dpi
+figureHeight = 720/figure_dpi
+fig, ax = plt.subplots(figsize=(figureWidth, figureHeight), dpi=figure_dpi)
+ax.plot(newModel.modelTrainHistory.history["loss"] )
+ax.plot(newModel.modelTrainHistory.history["categorical_accuracy"])
+ax.legend(['loss', 'accuracy'], loc='upper right')
+ax.set_xticks(newModel.modelTrainHistory.epoch)
+ax.set_ylabel('loss')
+ax.set_xlabel('epoch')
+#fig.save

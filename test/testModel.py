@@ -27,7 +27,7 @@ importlib.reload(rnnxna)
 
 
 testCases = [
-        "rnnXna train -i /home/data/git/rnnxna/test/test_files/samples_19_4k.csv --lstm-layers 2 --out_dir /home/data/git/rnnxna/out_test/test_19" ,
+        "rnnXna train -i /home/data/git/rnnxna/data/dataset_tm_32.csv --lstm-layers 2 --out_dir /home/data/git/rnnxna/out_test/test_19" ,
         ]
 
 testCasesIndex = 0
@@ -49,6 +49,9 @@ sys.argv =  getArgv(testCasesIndex)
 parser = rnnxna.rnnxna.createArgumentParser()
 parsedArgs = rnnxna.rnnxna.parseArgument(parser)
 modelType = autoDetectInput(parsedArgs.inputCSVFile)
+
+
+#%%
 
 if modelType == ModelType.Classification :
     Xs,Ys,seqLen,kClassMap = helpers.readDb(parsedArgs.inputCSVFile)
@@ -79,4 +82,38 @@ def loadModel(fileName):
     savedModel.model.set_weights(savedModel.modelParams)
     return savedModel
 
+#%% Testing CV##################################
+import importlib
+importlib.reload(rnnxna)
+import rnnxna.helpers as helpers
+inputFileName = "/home/data/git/rnnxna/test/test_files/samples_19_2k.csv"
+Xs,Ys,seqLen, kClassMap = helpers.readDb(inputFileName)
 #%%
+from sklearn.model_selection import StratifiedKFold
+import time
+seed = 7
+n_splits = 5
+kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+for i, (train, test) in enumerate(kfold.split(Xs[1:100], Ys[1:100])):
+    start_time = time.time()
+    print("Starting Fold {}".format(i))
+    print(train)
+    ## write save this to file
+    #Start model training and write model to file
+    #predict and write prediction to file 
+    print(test)
+    print("\t  *** %s seconds ***" % (time.time() - start_time))
+
+
+
+
+
+
+#%%##########################################
+
+
+
+
+
+
+
