@@ -1,5 +1,5 @@
 package:
-  name: rnnxna
+  name: rnnxna{{arcver}}
   version: "1.0.0"
 
 source:
@@ -17,7 +17,8 @@ requirements:
   run:
     - python
     - numpy
-    - tensorflow
+    - tensorflow # [arcver!='-gpu']
+    - tensorflow-gpu # [arcver=='-gpu']
     - scikit-learn
     - matplotlib
 
