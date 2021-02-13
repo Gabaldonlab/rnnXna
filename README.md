@@ -1,5 +1,4 @@
 [![Anaconda-Server Badge](https://anaconda.org/gabaldonlab/rnnxna/badges/version.svg)](https://anaconda.org/gabaldonlab/rnnxna)
-[![Anaconda-Server Badge](https://anaconda.org/gabaldonlab/rnnxna/badges/platforms.svg)](https://anaconda.org/gabaldonlab/rnnxna)
 [![Anaconda-Server Badge](https://anaconda.org/gabaldonlab/rnnxna/badges/latest_release_date.svg)](https://anaconda.org/gabaldonlab/rnnxna)
 [![Anaconda-Server Badge](https://anaconda.org/gabaldonlab/rnnxna/badges/license.svg)](https://anaconda.org/gabaldonlab/rnnxna)
 
