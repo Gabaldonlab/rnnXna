@@ -6,9 +6,9 @@
 ![alt text](https://image.ibb.co/bs7fAV/logos.png)
 
 
-## General descripiton of rnnXna
+## About rnnXna
 
-rnnXna is tool for tainining Recurrent neural network (RNN) for Classification and Regression Models for DNA and RNA sequences dataset. The tool support training and predition mode where  prevoius trained models can be used to infer new predicton on new input dateset.
+rnnXna is tool for training Recurrent neural network (RNN) for Classification and Regression Models for DNA and RNA sequences dataset. The tool support training and predition mode where  prevoius trained models can be used to infer new predicton on new input dateset.
 
 
 ## Installation and setup

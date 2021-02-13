@@ -1,0 +1,1 @@
+rnnXna: a tool for training Recurrent Neural Network (RNN) for Classification and Regression Models for DNA and RNA sequences dataset.

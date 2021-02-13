@@ -17,8 +17,8 @@ requirements:
   run:
     - python
     - numpy
-    - tensorflow # [arcver!='-gpu']
-    - tensorflow-gpu # [arcver=='-gpu']
+    - tensorflow >=2.0.0 # [arcver!='-gpu']
+    - tensorflow-gpu>=2.0.0 # [arcver=='-gpu']
     - scikit-learn
     - matplotlib
 
@@ -30,4 +30,4 @@ about:
   home: https://github.com/Gabaldonlab/rnnXna
   license: MIT
   license_file: LICENSE
-  summary: rnnXna
+  summary: rnnXna a tool for training Recurrent Neural Network (RNN) for Classification and Regression Models for DNA and RNA sequences dataset.

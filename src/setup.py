@@ -9,11 +9,11 @@ from setuptools import find_packages, setup, Command
 
 
 NAME = 'rnnxna'
-DESCRIPTION = 'Build rnnXna Models.'
+DESCRIPTION = 'Build RNN Models for DNA/RNA Sequences.'
 URL = 'https://github.com/Gabaldonlab/rnnXna'
 EMAIL = 'ah.hafez@gmail.com'
 AUTHOR = 'A. Hafez'
-REQUIRES_PYTHON = '>=3.7.0'
+REQUIRES_PYTHON = '>=3.6.0'
 VERSION = None
 
 # What packages are required for this module to be executed?

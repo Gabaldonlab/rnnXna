@@ -89,10 +89,10 @@ def getLogger():
 
 ## For testing
 #%%
-inputFileName = "/home/data/bio/data/rnn/csv/dataset_pdb_21.csv"
-sep="\t"
-nClms=2
-kClassMap= {"DS":1,"SS":0}
+#inputFileName = "/home/data/bio/data/rnn/csv/dataset_pdb_21.csv"
+#sep="\t"
+#nClms=2
+#kClassMap= {"DS":1,"SS":0}
 #%%
 
 

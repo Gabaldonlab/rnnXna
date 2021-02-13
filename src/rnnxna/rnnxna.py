@@ -32,7 +32,7 @@ soft_version =  __version__
 
 
 
-__DEBUG__ = True
+__DEBUG__ = False
 ###############################################################################
 #%%
 import enum
@@ -224,7 +224,7 @@ def parseArgument(argumentParser):
             helpers.getLogger().info("Found multiple GPUs available. rnnXna Will use the first one. If you want to use different one please specify its index using --device-index argument.")
         if parsedArgs.device_index == None :
             parsedArgs.device_index = 0
-        tf.config.experimental.set_memory_growth(physical_devices[parsedArgs.gpu_index], enable=True)
+        tf.config.experimental.set_memory_growth(physical_devices[parsedArgs.device_index], enable=True)
         def getDevice():
             return tf.device(f"/device:GPU:{parsedArgs.device_index}")
         parsedArgs.deviceOrScope = getDevice # tf.device(f"/device:GPU:{parsedArgs.device_index}")
