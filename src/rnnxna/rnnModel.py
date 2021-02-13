@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sat Nov 21 14:42:58 2020
-
+rnnXna
 @author: ahafez
 """
 import enum

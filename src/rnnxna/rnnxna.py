@@ -1,4 +1,5 @@
 """
+rnnXna
 @author: ahafez
 """
 # Imports
@@ -31,7 +32,7 @@ soft_version =  __version__
 
 
 
-__DEBUG__ = False
+__DEBUG__ = True
 ###############################################################################
 #%%
 import enum
@@ -208,8 +209,10 @@ def parseArgument(argumentParser):
         #tf.config.threading.set_intra_op_parallelism_threads(2)
         #tf.config.threading.set_inter_op_parallelism_threads(2)
         physical_devices = tf.config.list_physical_devices('CPU')
-        if len(physical_devices) > 1 :
+        if len(physical_devices) > 1 and parsedArgs.device_index == None  :
             helpers.getLogger().warning("Multiple CPUs available. rnnXna Will use the first one. If you want to use different one please specify its index using --device-index argument.")
+        if parsedArgs.device_index == None :
+            parsedArgs.device_index = 0
         def getDevice():
             return tf.device(f"/CPU:{parsedArgs.device_index}")
         parsedArgs.deviceOrScope =  getDevice #  tf.device(f"/CPU:{parsedArgs.device_index}")
@@ -217,7 +220,7 @@ def parseArgument(argumentParser):
         physical_devices = tf.config.list_physical_devices('GPU')
         if len(physical_devices) == 0 :
             raise RNNError("Can not find any GPU available. Please make sure that you already have a GPU and already have installed the required packages")
-        if len(physical_devices) > 1 :
+        if len(physical_devices) > 1 and parsedArgs.device_index == None :
             helpers.getLogger().info("Found multiple GPUs available. rnnXna Will use the first one. If you want to use different one please specify its index using --device-index argument.")
         if parsedArgs.device_index == None :
             parsedArgs.device_index = 0
@@ -379,8 +382,10 @@ def rnnXnaCV(parsedArgs):
             foldsData.append((train,test))
             #logger.info(test)
             logger.info(f"\t  Training Fold {foldIndex} took : {time.time() - start_time} seconds ***" )
-        
-        helpers.cvEvaluate2K(orginalYs,modelsPredictions , parsedArgs)
+        if len(kClassMap) == 2:
+            helpers.cvEvaluate2K(orginalYs,modelsPredictions, parsedArgs)
+        else:
+            helpers.cvEvaluateNK(orginalYs,modelsPredictions,kClassMap, parsedArgs)
         helpers.plotTrainingHist(newModels,parsedArgs)
 
         
@@ -475,7 +480,34 @@ def rnnXnaPredict(parsedArgs):
                 atLeastOne = True
             else:
                 logger.error(f"Can not find Input CSV File {inputCSVFile}")
+    if parsedArgs.inputFastaFiles != None:
+        for inputFastaFile in parsedArgs.inputFastaFiles :
+            if os.path.exists(inputFastaFile):
+                logger.info(f"Reading input fasta File {inputFastaFile}")
+                filePrefix = helpers.getBaseName(inputFastaFile)
 
+                inputFastaSeqs = helpers.readFasta_file(inputFastaFile)
+                
+                for seqName,seqObj in inputFastaSeqs.items():
+                    #seqName = inputFastaSeqsValue[i]["name"]
+                    data = seqObj["data"]
+                    Xs = helpers.getXsFromSeq(data,seqLen)
+                    predictedY = loadedModel.predict(Xs)
+                    if not filePrefix == "" :
+                        filePrefix = f"_{filePrefix}_"
+                    if len(inputFastaSeqs) == 1 :
+                        outPutPredictionFileName = f"{parsedArgs.out_dir}/{parsedArgs.prefix}{filePrefix}pred.csv"
+                    else:
+                        outPutPredictionFileName = f"{parsedArgs.out_dir}/{parsedArgs.prefix}{filePrefix}{seqName}_pred.csv"
+                    
+                    if loadedModel.modelType == ModelType.Classification :
+                        threshold = 1/loadedModel.nClasses
+                        helpers.writeCsv(outPutPredictionFileName,Xs,predictedY,loadedModel.kClasses,threshold)
+                    if loadedModel.modelType == ModelType.Regression :
+                        helpers.writeCsvReg(outPutPredictionFileName,Xs,predictedY)
+                    atLeastOne = True
+            else:
+                logger.error(f"Can not find Input fasta File {inputFastaFile}")
     if not atLeastOne :
         logger.error("Could not perform prediction on any of the given input files, Please revise your input")
 

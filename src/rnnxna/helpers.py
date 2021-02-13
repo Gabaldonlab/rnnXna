@@ -1,4 +1,7 @@
-
+"""
+rnnXna
+@author: ahafez
+"""
 import sys
 import os
 import logging
@@ -173,6 +176,7 @@ def readDb(inputFileName,nClms=2, sep="\t", kClassMap = None):
     #%%        
     inputFile.close()
     return Xs,Ys,seqLen, kClassMap
+    #return Xs[1:500],Ys[1:500],seqLen, kClassMap
         
 
 '''
@@ -470,6 +474,144 @@ def cvEvaluate2K(orginalYs,modelsPredictions , parsedArgs):
     plt.savefig(f"{outputPlotFileName}.eps", format='eps')
     #plt.show()
 
+
+'''
+PLot Precision Recal for each class in NK model
+'''
+def plotPrecisionRecallNK(fig,ax,y,y_pred,kClassMap,parsedArgs):
+    from tensorflow import keras
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import precision_recall_curve
+    from sklearn.metrics import average_precision_score
+    nClasses= len(kClassMap)
+    
+    
+    yOHT = keras.utils.to_categorical(y,nClasses,"int64")
+    # For each class
+    precision = dict()
+    recall = dict()
+    average_precision = dict()
+    for i in range(nClasses):
+        precision[i], recall[i], _ = precision_recall_curve(yOHT[:, i], y_pred[:, i])
+        average_precision[i] = average_precision_score(yOHT[:, i], y_pred[:, i])
+
+    # A "micro-average": quantifying score on all classes jointly
+    precision["micro"], recall["micro"], _ = precision_recall_curve(yOHT.ravel(), y_pred.ravel())
+    average_precision["micro"] = average_precision_score(yOHT, y_pred, average="micro")
+
+    #plt.figure(figsize=(7, 8))
+    f_scores = np.linspace(0.2, 0.8, num=4)
+    lines = []
+    labels = []
+    for f_score in f_scores:
+        x = np.linspace(0.01, 1)
+        y = f_score * x / (2 * x - f_score)
+        l, = ax.plot(x[y >= 0], y[y >= 0], color='gray', alpha=0.2)
+        ax.annotate('f1={0:0.1f}'.format(f_score), xy=(0.9, y[45] + 0.02))
+    
+    lines.append(l)
+    labels.append('iso-f1 curves')
+    l, = ax.plot(recall["micro"], precision["micro"], color='gold', lw=2)
+    lines.append(l)
+    labels.append('micro-average Precision-recall (area = {0:0.2f})'
+                  ''.format(average_precision["micro"]))
+    
+    for i in range(nClasses):
+        l, = ax.plot(recall[i], precision[i], lw=2)
+        lines.append(l)
+        labels.append('Precision-recall for class {0} (area = {1:0.2f})'
+                      ''.format(i, average_precision[i]))
+    
+    #fig = plt.gcf()
+    #fig.subplots_adjust(bottom=0.25)
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel('Recall')
+    ax.set_ylabel('Precision')
+    #ax.title('Extension of Precision-Recall curve to multi-class')
+    ax.legend(lines, labels, loc="upper right", prop=dict(size=12))
+
+
+
+def plotAveragePrecisionRecallNK(fig,ax,y,y_pred,kClassMap,parsedArgs):
+    from tensorflow import keras
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import precision_recall_curve
+    from sklearn.metrics import average_precision_score
+    nClasses= len(kClassMap)
+    
+    
+    yOHT = keras.utils.to_categorical(y,nClasses,"int64")
+    # For each class
+    precision = dict()
+    recall = dict()
+    average_precision = dict()
+    for i in range(nClasses):
+        precision[i], recall[i], _ = precision_recall_curve(yOHT[:, i], y_pred[:, i])
+        average_precision[i] = average_precision_score(yOHT[:, i], y_pred[:, i])
+
+    # A "micro-average": quantifying score on all classes jointly
+    precision["micro"], recall["micro"], _ = precision_recall_curve(yOHT.ravel(), y_pred.ravel())
+    average_precision["micro"] = average_precision_score(yOHT, y_pred, average="micro")
+
+    ax.step(recall['micro'], precision['micro'], where='post')
+    
+    legendLabel = ' Average AP : {0:0.2f}'.format(average_precision["micro"])
+    return legendLabel
+
+##  CV
+'''
+Cross Validation Evaluation for NK Classification
+'''
+def cvEvaluateNK(orginalYs,modelsPredictions,kClassMap, parsedArgs):
+    import matplotlib.pyplot as plt
+
+    logger = getLogger()
+    n_splits = len(orginalYs)
+    figure_dpi=96
+    figureWidth = 1280/figure_dpi
+    figureHeight = 720/figure_dpi
+    filePrefix = "plot"
+    if parsedArgs.prefix != None :
+        filePrefix = f"{parsedArgs.prefix}_plot"
+    for i in range(0,n_splits):
+        fig, ax = plt.subplots(figsize=(figureWidth, figureHeight), dpi=figure_dpi)
+        y_pred = modelsPredictions[i]
+        y_org = orginalYs[i]
+        logger.debug(f"CV Evaluation of Fold {i}")
+        #logger.debug(y_pred)
+        #logger.debug(y_org)
+        plotPrecisionRecallNK(fig,ax,y_org,y_pred,kClassMap,parsedArgs)
+        outputPlotFileName = f"{parsedArgs.out_dir}/{filePrefix}_PC_fold{i}"
+        ax.set_title(f'Fold {i} Precision-Recall curve to multi-class')
+        fig.savefig(f"{outputPlotFileName}.png",dpi=figure_dpi)
+        fig.savefig(f"{outputPlotFileName}.eps", format='eps')
+    
+    fig, ax = plt.subplots(figsize=(figureWidth, figureHeight), dpi=figure_dpi)
+    legends = []
+    for i in range(0,n_splits):
+        y_pred = modelsPredictions[i]
+        y_org = orginalYs[i]
+        logger.debug(f"CV Evaluation of Fold {i}")
+        #logger.debug(y_pred)
+        #logger.debug(y_org)
+        legendValue = plotAveragePrecisionRecallNK(fig,ax,y_org,y_pred,kClassMap,parsedArgs)
+        legends.append(f'Fold {i} - {legendValue}')
+    ax.set_xlabel('Recall')
+    ax.set_ylabel('Precision')
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlim([0.0, 1.0])
+    ax.legend(legends,loc="upper right")
+    ax.set_title( 'Average precision score, micro-averaged over all classes')
+
+    outputPlotFileName = f"{parsedArgs.out_dir}/{filePrefix}_APC"
+    fig.savefig(f"{outputPlotFileName}.png",dpi=figure_dpi)
+    fig.savefig(f"{outputPlotFileName}.eps", format='eps')
+
+
+    #plt.show()
+
+
 ##  CV
 '''
 Cross Validation Evaluation for binary Classification
@@ -612,7 +754,7 @@ def plotTrainingHist(newModels,parsedArgs):
                 plotFilePostfix = "training_mae"
             if accuracyKey != None :
                 ax.plot(hist[accuracyKey])
-                legends.append(f"MAE fold {i}")
+                legends.append(f"fold {i}")
             
         if accuracyKey != None :
             ax.set_xticks(newModel.modelTrainHistory.epoch)
@@ -623,3 +765,100 @@ def plotTrainingHist(newModels,parsedArgs):
             outputPlotFileName = f"{parsedArgs.out_dir}/{filePrefix}_{plotFilePostfix}"
             fig.savefig(f"{outputPlotFileName}.png",dpi=figure_dpi)
             fig.savefig(f"{outputPlotFileName}.eps", format='eps')
+
+#%%
+__Key_SeqName_ID = "name"
+# for getting seqeunce infomrtion if any is with the title
+def seqName_cuts(line,clm_Names=None,sep=" "):
+    dic = {}
+    tokens = line.split(sep)
+    for i in range(0,len(tokens)):
+        keyName = str(i)
+        if i == 0 :
+            keyName = __Key_SeqName_ID
+        if clm_Names is not None:
+            if i < len(clm_Names):
+                keyName = clm_Names[i]
+            else:
+                 keyName = str(i-len(clm_Names))
+        if "=" in tokens[i]:
+            kv = tokens[i].split("=")
+            tokens[i] = kv[1]
+            keyName = kv[0]
+        dic[keyName] = tokens[i].rstrip()
+    return dic
+# read fasta file 
+def readFasta_file(inputfilename, clm_Names=None,sep=" "):
+    inputFile = open(inputfilename, "r")
+    lines = inputFile.readlines()
+    
+    seqs  = {}
+    seqs_data  = {}
+
+    allSeq = {}
+    allSeqData = {}
+    seqLines = ""
+    seqName = ""
+    nameKeyIDStr = __Key_SeqName_ID
+    if clm_Names is not None:
+        nameKeyIDStr = clm_Names[0]
+    for line in lines:
+        if line.startswith(">"):
+            if seqName != "":
+                seqs["id"] = seqName.rstrip()
+                seqs_data["data"] = seqLines #np.array(list(seqLines),dtype=np.str)
+                seqs_data["id"] = seqName.rstrip()
+                metaInfo = seqName_cuts(seqName[1:],clm_Names,sep)
+                seqs.update(metaInfo)
+                seqs_data.update(metaInfo)
+                seqLines = ""
+                
+                allSeq[seqs[nameKeyIDStr]] = seqs
+                allSeqData[seqs[nameKeyIDStr]] = seqs_data
+            seqs = {}
+            seqs_data= {}
+            seqName = line
+        else:
+            seqLines += line.rstrip()
+            #seqData.extend(list(line.rstrip()))
+            
+    seqs = {}
+    seqs_data= {}
+
+    seqs["id"] = seqName
+    
+    seqs["id"] = seqName.rstrip()
+    seqs_data["data"] = seqLines #np.array(list(seqLines),dtype=np.str)
+    seqs_data["id"] = seqName.rstrip()
+    metaInfo = seqName_cuts(seqName[1:],clm_Names,sep)
+    seqs.update(metaInfo)
+    seqs_data.update(metaInfo)    
+    
+   
+    allSeq[seqs[nameKeyIDStr]] = seqs
+    allSeqData[seqs[nameKeyIDStr]] = seqs_data
+
+    return allSeqData
+
+def getXsFromSeq(seq,Kmer):
+    nSeq = len(seq)-Kmer+1
+    Xs = np.zeros((nSeq,Kmer), dtype=np.int64)
+    for i in range(0,nSeq):
+        inputSeq = seq[i:(i+Kmer)]
+        #print(inputSeq)
+        for j in range(0,Kmer) :
+            ch = inputSeq[j]
+            chVal = 0
+            if ch == "U" or ch == "u" :
+                chVal = 1
+            if ch == "G" or ch == "g":
+                chVal = 2
+            if ch == "C" or ch == "c":
+                chVal = 3
+            if ch == "A" or ch == "a":
+                chVal = 4
+            if ch == "T" or ch == "t":
+                chVal = 1
+            Xs[i,j] = chVal
+    return Xs
+    

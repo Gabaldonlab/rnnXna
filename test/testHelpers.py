@@ -9,7 +9,7 @@ import sys
 import os 
 
 ## get the module folder from the test script when executing it as script ...
-rnnXnaMuduleDir = os.path.abspath(os.path.dirname(os.path.realpath(__file__) ) +"/.." )
+rnnXnaMuduleDir = os.path.abspath(os.path.dirname(os.path.realpath(__file__) ) + "/../src/" )
 ## or set it manually if running in spyder or ipython console 
 sys.path.append(rnnXnaMuduleDir)
 
@@ -46,3 +46,10 @@ ax.set_xticks(newModel.modelTrainHistory.epoch)
 ax.set_ylabel('loss')
 ax.set_xlabel('epoch')
 #fig.save
+#%%
+import importlib
+importlib.reload(rnnxna)
+import rnnxna.helpers as helpers
+inputFileName = f"{rnnXnaMuduleDir}/../test/test_files/TETp9p9.1.fa"
+resFile = helpers.readFasta_file(inputFileName)
+Xs = helpers.getXsFromSeq(resFile['TETp9p9.2']['data'],21)

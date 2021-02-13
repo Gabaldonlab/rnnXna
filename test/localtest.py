@@ -1,4 +1,7 @@
-
+"""
+rnnXna
+@author: ahafez
+"""
 ## add local module dir for easy import 
 
 import sys
@@ -6,6 +9,7 @@ import os
 
 ## get the module folder from the test script when executing it as script ...
 rnnXnaMuduleDir = os.path.abspath(os.path.dirname(os.path.realpath(__file__) ) + "/../src/" )
+rnnXnaDir = f"{rnnXnaMuduleDir}/.."
 ## or set it manually if running in spyder or ipython console 
 ## rnnXnaMuduleDir = "???"
 sys.path.append(rnnXnaMuduleDir)
@@ -39,6 +43,7 @@ testCases = [
         "rnnXna predict -m /home/data/git/rnnxna/out_test/test_19/2kModel.model --csv /home/data/git/rnnxna/test/test_files/test_pred.csv --fasta /home/data/git/rnnxna/test/test_files/TETp9p9.1.fa  --out_dir /home/data/git/rnnxna/out_test/test_19 --prefix ts" ,
         # 8
         "rnnXna predict -m /home/data/git/rnnxna/out_test/test_19/2kModel.model --csv /home/data/git/rnnxna/test/test_files/test_pred_19.csv /home/data/git/rnnxna/test/test_files/test_pred2.csv  --out_dir /home/data/git/rnnxna/out_test/test_19 --prefix ts" ,
+        
         # 9 Error 
         "rnnXna predict -m /home/data/git/rnnxna/out_test/test_19/2kModel.model   --out_dir /home/data/git/rnnxna/out_test/test_19 --prefix ts" ,
         # 10 regression 
@@ -47,12 +52,17 @@ testCases = [
         "rnnXna predict -m /home/data/git/rnnxna/out_test/test_32/rg.model --csv /home/data/git/rnnxna/test/test_files/test_pred_32.csv /home/data/git/rnnxna/test/test_files/test_pred2.csv  --out_dir /home/data/git/rnnxna/out_test/test_32 --prefix ts" ,
         # 12 cv 2k
         "rnnXna  train  --cv-k 5 -i /home/data/git/rnnxna/test/test_files/samples_19_2k.csv --lstm-layers 2 --out_dir /home/data/git/rnnxna/out_test/test_19_cv --prefix 2kModel" ,
-        # 13 cv Reg
+        # 13 cv 2k
+        "rnnXna  train  --epochs 25 --cv-k 3 -i /home/data/git/rnnxna/test/test_files/samples_19_4k.csv --lstm-layers 2 --out_dir /home/data/git/rnnxna/out_test/test_19_4kcv --prefix 4kModel" ,
+        # 14 cv Reg
         "rnnXna  train  --tpu --gpu --cv-k 3 -i /home/data/git/rnnxna/data/dataset_tm_32.csv --lstm-layers 2 --out_dir /home/data/git/rnnxna/out_test/test_32_rcv --prefix R1Model" ,
+        # 15 prediction fasta
+        f"rnnXna predict -m {rnnXnaDir}/out_test/test_19_2k/2kModel.model --fasta {rnnXnaDir}/test/test_files/TETp9p9.1.fa   --out_dir {rnnXnaDir}/out_test/test_19 --prefix fastatest" ,
 
+        
         ]
 
-testCasesIndex = 1
+testCasesIndex = 15
 def getArgv(i):
     #print(testCases[i].split(' '))
     testCases[i] = testCases[i].strip()
